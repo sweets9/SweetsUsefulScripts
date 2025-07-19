@@ -13,8 +13,8 @@ cd /root/SweetsUsefulScripts
 git pull
 
 # 2. Copy the script to your system path (e.g. /root/bin)
-cp checkMount.py /root/bin/checkMount.py
-chmod +x /root/bin/checkMount.py
+cp checkMounts.py /root/bin/checkMounts.py
+chmod +x /root/bin/checkMounts.py
 
 # 3. (Optional) Create a .env file for configuration
 echo "SEND_NOTIFICATIONS=true
@@ -27,8 +27,8 @@ EMAIL_TO=admin@example.com " >> /root/bin/.env
 pip install python-dotenv # if required
 
 # 5. (Optional) Add to crontab for regular checks every 5 minutes
-/root/bin/checkMount.py --install
+/root/bin/checkMounts.py --install
 
 # Quick Update Anytime:
-cd /root/SweetsUsefulScripts && git pull && cp checkMount.py /root/bin/checkMount.py && chmod +x /root/bin/checkMount.py
+cd /root/SweetsUsefulScripts && git pull && cp checkMounts.py /root/bin/checkMounts.py && chmod +x /root/bin/checkMounts.py
 ```
