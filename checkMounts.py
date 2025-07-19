@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-checkMount.py – Network Share Monitoring/Repair Script
+checkMounts.py – Network Share Monitoring/Repair Script
 Version: 1.2.0
 Author: exJuice
 Last Modified: 2025-07-19
@@ -24,10 +24,10 @@ Features:
 
 Usage:
 ------
-  python3 checkMount.py           # Normal run
-  python3 checkMount.py --debug   # Debug mode with full email output
-  python3 checkMount.py --install # Install to root's crontab
-  python3 checkMount.py --remove  # Remove from root's crontab
+  python3 checkMounts.py           # Normal run
+  python3 checkMounts.py --debug   # Debug mode with full email output
+  python3 checkMounts.py --install # Install to root's crontab
+  python3 checkMounts.py --remove  # Remove from root's crontab
 
 Requirements:
 -------------
@@ -434,10 +434,10 @@ def install_to_crontab():
         result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
         current_cron = result.stdout if result.returncode == 0 else ""
 
-        if "checkMount.py" in current_cron:
-            print("checkMount.py already installed in crontab:")
+        if "checkMounts.py" in current_cron:
+            print("checkMounts.py already installed in crontab:")
             for line in current_cron.splitlines():
-                if "checkMount.py" in line:
+                if "checkMounts.py" in line:
                     print(f"  {line}")
             return
 
@@ -446,7 +446,7 @@ def install_to_crontab():
         proc.communicate(input=new_cron)
 
         if proc.returncode == 0:
-            print("Successfully installed checkMount.py to root's crontab.")
+            print("Successfully installed checkMounts.py to root's crontab.")
             print(f"Schedule: Every 5 minutes")
             print(f"Command: {cron_line}")
         else:
@@ -464,10 +464,10 @@ def remove_from_crontab():
             print("No crontab for root or unable to read.")
             return
         lines = result.stdout.splitlines()
-        new_lines = [line for line in lines if "checkMount.py" not in line]
+        new_lines = [line for line in lines if "checkMounts.py" not in line]
 
         if len(new_lines) == len(lines):
-            print("No checkMount.py entry found in crontab.")
+            print("No checkMounts.py entry found in crontab.")
             return
 
         new_cron = "\n".join(new_lines) + "\n"
@@ -475,7 +475,7 @@ def remove_from_crontab():
         proc.communicate(input=new_cron)
 
         if proc.returncode == 0:
-            print("Removed checkMount.py from root's crontab.")
+            print("Removed checkMounts.py from root's crontab.")
         else:
             print("Failed to remove from crontab.")
     except Exception as exc:
@@ -534,7 +534,7 @@ def main():
     if args.install:
         if os.geteuid() != 0:
             print("ERROR: Must run as root to install to crontab")
-            print("Try: sudo python3 checkMount.py --install")
+            print("Try: sudo python3 checkMounts.py --install")
             sys.exit(1)
         install_to_crontab()
         return
@@ -542,13 +542,13 @@ def main():
     if args.remove:
         if os.geteuid() != 0:
             print("ERROR: Must run as root to remove from crontab")
-            print("Try: sudo python3 checkMount.py --remove")
+            print("Try: sudo python3 checkMounts.py --remove")
             sys.exit(1)
         remove_from_crontab()
         return
 
     setup_logging(args.debug)
-    log("Starting checkMount.py")
+    log("Starting checkMounts.py")
     log(f"Script started at: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
 
     if os.geteuid() != 0:
@@ -573,7 +573,7 @@ def main():
 
     if errors and NOTIFY.get("script_errors", True):
         send_email("Script execution errors",
-                   f"checkMount.py encountered {len(errors)} error(s):\n\n" + "\n".join(f"  - {e}" for e in errors),
+                   f"checkMounts.py encountered {len(errors)} error(s):\n\n" + "\n".join(f"  - {e}" for e in errors),
                    "script_errors")
 
     cleanup_and_exit(1 if errors else 0)
