@@ -26,8 +26,12 @@ EMAIL_TO=admin@example.com " >> /root/bin/.env
 # 4. Install Python dependencies 
 pip install python-dotenv # if required
 
-# 5. (Optional) Add to crontab for regular checks every 5 minutes
+# 5. (Recommended) Add to crontab for regular checks every 5 minutes
 /root/bin/checkMounts.py --install
+
+# 6. (Recommended) Create sentinel file to check if share is really up or not
+# Note: Only run if all shares are correctly mounted and functioning otherwise will create the sentinel file in a dead path
+awk '$3 ~ /nfs|cifs/ {print $2}' /etc/fstab | while read m; do mountpoint -q "$m" && touch "$m/.checkMount"; done
 
 # Quick Update Anytime:
 cd /root/SweetsUsefulScripts && git pull && cp checkMounts.py /root/bin/checkMounts.py && chmod +x /root/bin/checkMounts.py
