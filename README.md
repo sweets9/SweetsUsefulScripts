@@ -24,7 +24,7 @@ EMAIL_FROM=noreply@example.com
 EMAIL_TO=admin@example.com " >> /root/bin/.env
 
 # 4. Install Python dependencies 
-pip install python-dotenv # if required
+pip install python-dotenv || apt install python3-dotenv # if required
 
 # 5. (Recommended) Add to crontab for regular checks every 5 minutes
 /root/bin/checkMounts.py --install
