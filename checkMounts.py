@@ -208,19 +208,25 @@ def is_stale(mountpoint: str) -> Tuple[bool, str]:
         path = Path(mountpoint)
         if not path.exists():
             return True, "mountpoint does not exist"
+
         try:
-            next(path.iterdir())
-        except StopIteration:
-            pass
+            list(path.iterdir())  # force directory read to check for stale state
         except OSError as exc:
             if exc.errno in (errno.ESTALE, errno.EIO, errno.ENOTCONN, errno.ENOENT):
-                return True, os.strerror(exc.errno)
+                return True, f"Filesystem error: {os.strerror(exc.errno)}"
+            else:
+                return True, f"OSError: {exc}"
+
+        sentinel = Path(mountpoint, SENTINEL_FILE)
+        if not sentinel.is_file():
+            return False, f"{SENTINEL_FILE} file missing"  # not stale, just missing marker
+
+        return False, "healthy"
+
     except Exception as exc:
         log(f"Unexpected error checking {mountpoint}: {exc}", syslog.LOG_WARNING)
-    sentinel = Path(mountpoint, SENTINEL_FILE)
-    if not sentinel.is_file():
-        return True, f"{SENTINEL_FILE} file missing"
-    return False, "healthy"
+        return True, "exception during stale check"
+
 
 def unmount_with_retry(mountpoint: str) -> bool:
     """Try to unmount a mountpoint (soft, force, lazy) with retries."""
@@ -266,26 +272,20 @@ def unmount_with_retry(mountpoint: str) -> bool:
     return False
 
 
-def remount_with_retry(mountpoint: str) -> bool:
-    """Try mounting the mountpoint with retries."""
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            result = subprocess.run(["mount", mountpoint], capture_output=True, timeout=60, text=True)
-            time.sleep(SLEEP)
-            if mountpoint in mounted_points():
-                log(f"Mount successful on attempt {attempt}: {mountpoint}")
-                return True
-            else:
-                log(f"Mount attempt {attempt} failed: {mountpoint}")
-                if result.stderr:
-                    log(f"Mount stderr: {result.stderr.strip()}")
-        except Exception as exc:
-            log(f"Mount attempt {attempt} error: {mountpoint}: {exc}", syslog.LOG_WARNING)
+def remount_all_with_mount_a() -> bool:
+    """Run `mount -a` to remount all entries in fstab."""
+    try:
+        result = subprocess.run(["mount", "-a"], capture_output=True, timeout=60, text=True)
+        if result.returncode == 0:
+            log("mount -a executed successfully")
+            return True
+        else:
+            log(f"mount -a failed with stderr: {result.stderr.strip()}", syslog.LOG_ERR)
+            return False
+    except Exception as exc:
+        log(f"Exception running mount -a: {exc}", syslog.LOG_ERR)
+        return False
 
-        if attempt < MAX_RETRIES:
-            time.sleep(SLEEP * attempt)  # exponential backoff
-
-    return False
 
 
 def format_size(size_bytes: int) -> str:
@@ -396,33 +396,35 @@ def handle_share(device: str, mountpoint: str, fstype: str) -> None:
                 body += f"\n... and {len(leftover) - MAX_LISTING} more items"
             send_email(f"Residual files: {mountpoint}", body, "residual_files")
 
-        mount_success = remount_with_retry(mountpoint)
+        if not remount_all_with_mount_a():
+            send_email(f"Remount FAILED (mount -a): {mountpoint}",
+                       f"mount -a failed while trying to remount {device} at {mountpoint}.",
+                       "remount_result")
+            return
 
-        if mount_success:
-            time.sleep(SLEEP)  # let mount settle
-            is_stale_after, stale_reason = is_stale(mountpoint)
+        time.sleep(SLEEP)  # allow mount to settle
+        is_stale_after, stale_reason = is_stale(mountpoint)
 
-            # Special case: remount worked but sentinel still missing
-            if is_stale_after and stale_reason == f"{SENTINEL_FILE} file missing":
-                log(f"Remount succeeded but sentinel file '{SENTINEL_FILE}' is missing at {mountpoint}", syslog.LOG_WARNING)
-                send_email(f"Sentinel missing after remount: {mountpoint}",
-                           f"Share {device} at {mountpoint} was successfully remounted, "
-                           f"but the required sentinel file '{SENTINEL_FILE}' is still missing.\n\n"
-                           f"Consider verifying the share contents.",
-                           "script_errors")
-                mount_success = True  # Do NOT treat as a failure
-            elif is_stale_after:
-                log(f"Remount failed due to persistent stale state at {mountpoint}", syslog.LOG_ERR)
-                mount_success = False
-
-        if NOTIFY["remount_result"]:
-            status = "OK" if mount_success else "FAILED"
-            send_email(f"Remount {status}: {mountpoint}",
-                       f"Share {device} at {mountpoint} remount {'successful' if mount_success else 'FAILED'}.",
+        if is_stale_after and stale_reason == f"{SENTINEL_FILE} file missing":
+            log(f"Remount succeeded but sentinel file '{SENTINEL_FILE}' is missing at {mountpoint}", syslog.LOG_WARNING)
+            send_email(f"Sentinel missing after remount: {mountpoint}",
+                       f"Share {device} at {mountpoint} was successfully remounted, "
+                       f"but the required sentinel file '{SENTINEL_FILE}' is still missing.\n\n"
+                       f"Consider verifying the share contents.",
+                       "script_errors")
+        elif is_stale_after:
+            log(f"Remount failed due to persistent stale state at {mountpoint}", syslog.LOG_ERR)
+            send_email(f"Remount FAILED: {mountpoint}",
+                       f"Share {device} at {mountpoint} remains in a stale or unreadable state after mount -a.",
                        "remount_result")
 
+        elif NOTIFY["remount_result"]:
+            send_email(f"Remount OK: {mountpoint}",
+                       f"Share {device} at {mountpoint} successfully remounted with mount -a.",
+                       "remount_result")
     else:
         log(f"No remount needed for {mountpoint}")
+
 
 
 def install_to_crontab():
